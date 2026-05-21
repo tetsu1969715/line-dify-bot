@@ -12,6 +12,9 @@ LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 DIFY_API_KEY = os.environ.get("DIFY_API_KEY")
 DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://api.dify.ai/v1")
 
+# ユーザーごとの会話IDを記憶する辞書
+conversation_ids = {}
+
 def verify_signature(body, signature):
     hash = hmac.new(LINE_CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()
     return base64.b64encode(hash).decode() == signature
@@ -21,15 +24,20 @@ def get_dify_response(user_id, message):
         "Authorization": f"Bearer {DIFY_API_KEY}",
         "Content-Type": "application/json"
     }
+    conversation_id = conversation_ids.get(user_id, "")
     data = {
         "inputs": {},
         "query": message,
         "response_mode": "blocking",
-        "conversation_id": "",
+        "conversation_id": conversation_id,
         "user": user_id
     }
     res = requests.post(f"{DIFY_BASE_URL}/chat-messages", headers=headers, json=data)
-    return res.json().get("answer", "申し訳ありません。エラーが発生しました。")
+    result = res.json()
+    new_conversation_id = result.get("conversation_id", "")
+    if new_conversation_id:
+        conversation_ids[user_id] = new_conversation_id
+    return result.get("answer", "申し訳ありません。エラーが発生しました。")
 
 def reply_to_line(reply_token, message):
     headers = {
